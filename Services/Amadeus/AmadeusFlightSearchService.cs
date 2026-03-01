@@ -129,21 +129,16 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
         if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array) 
             return null;
 
-        decimal? min = null;
-        foreach (var offer in data.EnumerateArray())
-        {
-            if (!offer.TryGetProperty("price", out var price) || !price.TryGetProperty("grandTotal", out var total))
-                continue;
-
-            string? totalStr = total.GetString();
-            if (string.IsNullOrEmpty(totalStr) 
-                || !decimal.TryParse(totalStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
-                continue;
-
-            if (min == null || value < min.Value)
-                min = value;
-        }
-
-        return min;
+        return data.EnumerateArray()
+            .Select(offer => 
+                offer.TryGetProperty("price", out var price) 
+                    && price.TryGetProperty("grandTotal", out var total)
+                    && decimal.TryParse(total.GetString(), NumberStyles.Any, 
+                    CultureInfo.InvariantCulture, out var value)
+                    ? (decimal?)value
+                    : null)
+            .Where(price => price.HasValue)
+            .DefaultIfEmpty()
+            .Min();
     }
 }
