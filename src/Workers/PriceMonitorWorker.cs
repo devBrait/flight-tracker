@@ -48,13 +48,13 @@ public class PriceMonitorWorker : BackgroundService
     private async Task RunOnceAsync(CancellationToken cancellationToken)
     {
         using IServiceScope scope = _serviceProvider.CreateScope();
-        var flightSearch = scope.ServiceProvider.GetRequiredService<IAmadeusFlightSearchService>();
-        var notification = scope.ServiceProvider.GetRequiredService<ITelegramNotificationService>();
+        IAmadeusFlightSearchService flightSearch = scope.ServiceProvider.GetRequiredService<IAmadeusFlightSearchService>();
+        ITelegramNotificationService notification = scope.ServiceProvider.GetRequiredService<ITelegramNotificationService>();
 
-        var origin = _flightOptions.Origin;
-        var destination = _flightOptions.Destination;
-        var departureDateStr = _flightOptions.DepartureDate;
-        var returnDateStr = _flightOptions.ReturnDate;
+        string origin = _flightOptions.Origin;
+        string destination = _flightOptions.Destination;
+        string departureDateStr = _flightOptions.DepartureDate;
+        string returnDateStr = _flightOptions.ReturnDate;
 
         if (string.IsNullOrWhiteSpace(origin) 
             || string.IsNullOrWhiteSpace(destination) 
@@ -76,7 +76,7 @@ public class PriceMonitorWorker : BackgroundService
 
         _logger.LogInformation("Price found: R$ {Price:N2} ({Origin} -> {Destination})", price.Value, origin, destination);
 
-        // 2. Send Telegram (price <= target)
+        // 2. Send Telegram
         var link = GoogleFlightsLinkBuilder.Build(origin, destination, departureDateStr, returnDateStr);
         await notification.SendFlightPriceAlertAsync(origin, destination, departureDateStr, returnDateStr, 
             price.Value, null, link, isTargetReached: true, cancellationToken);

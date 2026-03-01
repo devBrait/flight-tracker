@@ -17,7 +17,7 @@ public class FlightOptions
     public string DepartureDate { get; set; } = string.Empty;
 
     /// <summary>Return date in YYYY-MM-DD format. Empty = one-way only.</summary>
-    public string? ReturnDate { get; set; }
+    public string ReturnDate { get; set; } = string.Empty;
 
     /// <summary>Target price; when price is &lt;= this value, the message shows "target reached".</summary>
     public decimal TargetPrice { get; set; }

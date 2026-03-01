@@ -1,4 +1,5 @@
 using dotenv.net;
+using FlightTracker.Common;
 using FlightTracker.Configuration;
 using FlightTracker.Services.Amadeus;
 using FlightTracker.Services.Telegram;
@@ -12,7 +13,8 @@ builder.Services.Configure<FlightOptions>(builder.Configuration.GetSection(Fligh
 builder.Services.Configure<AmadeusOptions>(builder.Configuration.GetSection(AmadeusOptions.SectionName));
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 
-builder.Services.AddHttpClient();
+builder.Services.AddExternalHttpClients();
+
 builder.Services.AddScoped<IAmadeusFlightSearchService, AmadeusFlightSearchService>();
 builder.Services.AddScoped<ITelegramNotificationService, TelegramNotificationService>();
 builder.Services.AddHostedService<PriceMonitorWorker>();

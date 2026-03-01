@@ -30,7 +30,7 @@ public class TelegramNotificationService : ITelegramNotificationService
         string googleFlightsLink, bool isTargetReached, CancellationToken cancellationToken = default)
     {
         StringBuilder text = new StringBuilder();
-        
+
         text.AppendLine();
         text.AppendLine("✈️ *Verification Summary!* \n");
         text.AppendLine($"Origin: {EscapeMarkdown(origin)}");
@@ -50,31 +50,26 @@ public class TelegramNotificationService : ITelegramNotificationService
         };
         string json = JsonSerializer.Serialize(payload);
 
-        for (var attempt = 1; attempt <= Constants.MaxRetries; attempt++)
+        try
         {
-            try
-            {
-                HttpClient client = _httpClientFactory.CreateClient();
-                string url = $"{Constants.TelegramApiBase}/bot{_options.BotToken}/sendMessage";
-                
-                using StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await client.PostAsync(url, content, cancellationToken);
-                if (response.IsSuccessStatusCode)
-                {
-                    _logger.LogInformation("Notification sent successfully to Telegram (chat {ChatId})", _options.ChatId);
-                    return;
-                }
+            HttpClient client = _httpClientFactory.CreateClient("Telegram");
+            string url = $"/bot{_options.BotToken}/sendMessage";
 
-                string body = await response.Content.ReadAsStringAsync(cancellationToken);
-                _logger.LogError("Telegram API returned {StatusCode}: {Body}", response.StatusCode, body);
-            }
-            catch (Exception ex)
+            using StringContent content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await client.PostAsync(url, content, cancellationToken);
+
+            if (response.IsSuccessStatusCode)
             {
-                _logger.LogError(ex, "Attempt {Attempt}/{Max} failed to send Telegram notification", attempt, Constants.MaxRetries);
+                _logger.LogInformation("Notification sent successfully to Telegram (chat {ChatId})", _options.ChatId);
+                return;
             }
 
-            if (attempt < Constants.MaxRetries)
-                await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            _logger.LogError("Telegram API returned {StatusCode}: {Body}", response.StatusCode, body);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send Telegram notification");
         }
     }
 

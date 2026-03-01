@@ -31,55 +31,45 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
         string departureDate, string returnDate, 
         CancellationToken cancellationToken = default)
     {
-        for (var attempt = 1; attempt <= Constants.MaxRetries; attempt++)
+        try
         {
-            try
+            string? token = await GetAccessTokenAsync(cancellationToken);
+            if (string.IsNullOrEmpty(token))
             {
-                string? token = await GetAccessTokenAsync(cancellationToken);
-                if (string.IsNullOrEmpty(token))
-                {
-                    _logger.LogError("Failed to obtain Amadeus token");
-                    return null;
-                }
-
-                HttpClient client = _httpClientFactory.CreateClient();
-                string url = $"{Constants.AmadeusTestBase}/v2/shopping/flight-offers?" +
-                    $"originLocationCode={origin}&" +
-                    $"destinationLocationCode={destination}&" +
-                    $"departureDate={departureDate}&" +
-                    $"returnDate={returnDate}&" +
-                    $"adults=1&" +
-                    $"currencyCode=BRL&" +
-                    $"travelClass=ECONOMY&" +
-                    $"max=30";
-
-                using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-                HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
-                if (!response.IsSuccessStatusCode)
-                {
-                    string body = await response.Content.ReadAsStringAsync(cancellationToken);
-                    _logger.LogError("Amadeus API returned {StatusCode}: {Body}", response.StatusCode, body);
-                   
-                    if (attempt < Constants.MaxRetries)
-                        await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
-
-                    continue;
-                }
-
-                string json = await response.Content.ReadAsStringAsync(cancellationToken);
-                return ParseLowestPrice(json);
+                _logger.LogError("Failed to obtain Amadeus token");
+                return null;
             }
-            catch (Exception ex)
+
+            HttpClient client = _httpClientFactory.CreateClient("Amadeus");
+            string url = $"/v2/shopping/flight-offers?" +
+                $"originLocationCode={origin}&" +
+                $"destinationLocationCode={destination}&" +
+                $"departureDate={departureDate}&" +
+                $"returnDate={returnDate}&" +
+                $"adults=1&" +
+                $"currencyCode=BRL&" +
+                $"travelClass=ECONOMY&" +
+                $"max=30";
+
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError(ex, "Attempt {Attempt}/{Max} failed to fetch Amadeus price", attempt, Constants.MaxRetries);
-                if (attempt < Constants.MaxRetries)
-                    await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+                string body = await response.Content.ReadAsStringAsync(cancellationToken);
+                _logger.LogError("Amadeus API returned {StatusCode}: {Body}", response.StatusCode, body);
+                return null;
             }
+
+            string json = await response.Content.ReadAsStringAsync(cancellationToken);
+            return ParseLowestPrice(json);
         }
-
-        return null;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch Amadeus price");
+            return null;
+        }
     }
 
     /// <summary>
@@ -89,7 +79,7 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
     {
         try
         {
-            HttpClient client = _httpClientFactory.CreateClient();
+            HttpClient client = _httpClientFactory.CreateClient("Amadeus");
             var form = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("grant_type", "client_credentials"),
@@ -97,9 +87,9 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
                 new KeyValuePair<string, string>("client_secret", _options.ClientSecret)
             });
 
-            using HttpResponseMessage response = await client.PostAsync($"{Constants.AmadeusTestBase}/v1/security/oauth2/token", form, cancellationToken);
+            using HttpResponseMessage response = await client.PostAsync("/v1/security/oauth2/token", form, cancellationToken);
             string body = await response.Content.ReadAsStringAsync(cancellationToken);
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Amadeus OAuth2 returned {StatusCode}. Response: {Body}. Check ClientId/ClientSecret in .env and use TEST environment credentials.", 
@@ -107,7 +97,7 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
                 return null;
             }
 
-            var doc = JsonDocument.Parse(body);
+            using var doc = JsonDocument.Parse(body);
             return doc.RootElement.TryGetProperty("access_token", out var tokenProp)
                 ? tokenProp.GetString()
                 : null;
@@ -125,7 +115,7 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
     /// </summary>
     private static decimal? ParseLowestPrice(string json)
     {
-        var doc = JsonDocument.Parse(json);
+        using var doc = JsonDocument.Parse(json);
         if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array) 
             return null;
 
