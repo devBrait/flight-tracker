@@ -33,4 +33,4 @@ jobs:
         run: dotnet restore
 
       - name: Run Flight Tracker
-        run: dotnet run --project src/FlightTracker
+        run: dotnet run --project src/FlightTracker.csproj
