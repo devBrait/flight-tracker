@@ -1,14 +1,7 @@
 # Build
 bin/
 obj/
-
-# SQLite (dados locais)
-*.db
-*.db-shm
-*.db-wal
-
-# User secrets
-secrets.json
+.vs
 
 # .env (credenciais locais)
 .env

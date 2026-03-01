@@ -2,17 +2,16 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using FlightTracker.Configuration;
+using System.Globalization;
+using FlightTracker.Common;
 
-namespace FlightTracker.Services;
+namespace FlightTracker.Services.Amadeus;
 
 /// <summary>
 /// Flight search implementation using Amadeus API (OAuth2 + Flight Offers Search).
-/// Uses HttpClientFactory and simple retry on failure.
 /// </summary>
-public class AmadeusFlightSearchService : IFlightSearchService
+public class AmadeusFlightSearchService : IAmadeusFlightSearchService
 {
-    private const string AmadeusTestBase = "https://test.api.amadeus.com";
-    private const int MaxRetries = 3;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<AmadeusFlightSearchService> _logger;
     private readonly AmadeusOptions _options;
@@ -27,52 +26,53 @@ public class AmadeusFlightSearchService : IFlightSearchService
         _options = options.Value;
     }
 
-    /// <inheritdoc />
-    public async Task<decimal?> GetLowestPriceAsync(string origin, string destination, string departureDate, string? returnDate, CancellationToken cancellationToken = default)
+    public async Task<decimal?> GetLowestPriceAsync(
+        string origin, string destination, 
+        string departureDate, string? returnDate, 
+        CancellationToken cancellationToken = default)
     {
-        for (var attempt = 1; attempt <= MaxRetries; attempt++)
+        for (var attempt = 1; attempt <= Constants.MaxRetries; attempt++)
         {
             try
             {
-                var token = await GetAccessTokenAsync(cancellationToken);
+                string? token = await GetAccessTokenAsync(cancellationToken);
                 if (string.IsNullOrEmpty(token))
                 {
                     _logger.LogError("Failed to obtain Amadeus token");
                     return null;
                 }
 
-                var client = _httpClientFactory.CreateClient();
-
-                var url = $"{AmadeusTestBase}/v2/shopping/flight-offers?" +
+                HttpClient client = _httpClientFactory.CreateClient();
+                string url = $"{Constants.AmadeusTestBase}/v2/shopping/flight-offers?" +
                         $"originLocationCode={origin}&" +
                         $"destinationLocationCode={destination}&" +
                         $"departureDate={departureDate}&" +
+                        $"returnDate={returnDate}&" +
                         $"adults=1&" +
                         $"currencyCode=BRL";
 
-                if (!string.IsNullOrWhiteSpace(returnDate))
-                    url += $"&returnDate={returnDate!.Trim()}";
-
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-                var response = await client.SendAsync(request, cancellationToken);
+                HttpResponseMessage response = await client.SendAsync(request, cancellationToken);
                 if (!response.IsSuccessStatusCode)
                 {
-                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                    string body = await response.Content.ReadAsStringAsync(cancellationToken);
                     _logger.LogError("Amadeus API returned {StatusCode}: {Body}", response.StatusCode, body);
-                    if (attempt < MaxRetries)
+                   
+                    if (attempt < Constants.MaxRetries)
                         await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+
                     continue;
                 }
 
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
+                string json = await response.Content.ReadAsStringAsync(cancellationToken);
                 return ParseLowestPrice(json);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Attempt {Attempt}/{Max} failed to fetch Amadeus price", attempt, MaxRetries);
-                if (attempt < MaxRetries)
+                _logger.LogError(ex, "Attempt {Attempt}/{Max} failed to fetch Amadeus price", attempt, Constants.MaxRetries);
+                if (attempt < Constants.MaxRetries)
                     await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
             }
         }
@@ -87,21 +87,25 @@ public class AmadeusFlightSearchService : IFlightSearchService
     {
         try
         {
-            var client = _httpClientFactory.CreateClient();
+            HttpClient client = _httpClientFactory.CreateClient();
             var form = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("grant_type", "client_credentials"),
                 new KeyValuePair<string, string>("client_id", _options.ClientId),
                 new KeyValuePair<string, string>("client_secret", _options.ClientSecret)
             });
-            using var response = await client.PostAsync($"{AmadeusTestBase}/v1/security/oauth2/token", form, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            using HttpResponseMessage response = await client.PostAsync($"{Constants.AmadeusTestBase}/v1/security/oauth2/token", form, cancellationToken);
+            string body = await response.Content.ReadAsStringAsync(cancellationToken);
+            
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Amadeus OAuth2 returned {StatusCode}. Response: {Body}. Check ClientId/ClientSecret in .env and use TEST environment credentials.", response.StatusCode, body);
+                _logger.LogError("Amadeus OAuth2 returned {StatusCode}. Response: {Body}. Check ClientId/ClientSecret in .env and use TEST environment credentials.", 
+                    response.StatusCode, body);
                 return null;
             }
-            using var doc = JsonDocument.Parse(body);
+
+            var doc = JsonDocument.Parse(body);
             return doc.RootElement.TryGetProperty("access_token", out var tokenProp)
                 ? tokenProp.GetString()
                 : null;
@@ -119,27 +123,25 @@ public class AmadeusFlightSearchService : IFlightSearchService
     /// </summary>
     private static decimal? ParseLowestPrice(string json)
     {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
-                return null;
-            decimal? min = null;
-            foreach (var offer in data.EnumerateArray())
-            {
-                if (!offer.TryGetProperty("price", out var price) || !price.TryGetProperty("grandTotal", out var total))
-                    continue;
-                var totalStr = total.GetString();
-                if (string.IsNullOrEmpty(totalStr) || !decimal.TryParse(totalStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var value))
-                    continue;
-                if (min == null || value < min.Value)
-                    min = value;
-            }
-            return min;
-        }
-        catch
-        {
+        var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array) 
             return null;
+
+        decimal? min = null;
+        foreach (var offer in data.EnumerateArray())
+        {
+            if (!offer.TryGetProperty("price", out var price) || !price.TryGetProperty("grandTotal", out var total))
+                continue;
+
+            string? totalStr = total.GetString();
+            if (string.IsNullOrEmpty(totalStr) 
+                || !decimal.TryParse(totalStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+                continue;
+
+            if (min == null || value < min.Value)
+                min = value;
         }
+
+        return min;
     }
 }

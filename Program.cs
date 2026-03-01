@@ -1,6 +1,7 @@
 using dotenv.net;
 using FlightTracker.Configuration;
-using FlightTracker.Services;
+using FlightTracker.Services.Amadeus;
+using FlightTracker.Services.Telegram;
 using FlightTracker.Workers;
 
 DotEnv.Load(options: new DotEnvOptions(ignoreExceptions: true, probeForEnv: true, probeLevelsToSearch: 4));
@@ -12,8 +13,8 @@ builder.Services.Configure<AmadeusOptions>(builder.Configuration.GetSection(Amad
 builder.Services.Configure<TelegramOptions>(builder.Configuration.GetSection(TelegramOptions.SectionName));
 
 builder.Services.AddHttpClient();
-builder.Services.AddScoped<IFlightSearchService, AmadeusFlightSearchService>();
-builder.Services.AddScoped<INotificationService, TelegramNotificationService>();
+builder.Services.AddScoped<IAmadeusFlightSearchService, AmadeusFlightSearchService>();
+builder.Services.AddScoped<ITelegramNotificationService, TelegramNotificationService>();
 builder.Services.AddHostedService<PriceMonitorWorker>();
 
 var host = builder.Build();
