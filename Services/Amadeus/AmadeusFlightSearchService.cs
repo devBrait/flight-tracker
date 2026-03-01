@@ -28,7 +28,7 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
 
     public async Task<decimal?> GetLowestPriceAsync(
         string origin, string destination, 
-        string departureDate, string? returnDate, 
+        string departureDate, string returnDate, 
         CancellationToken cancellationToken = default)
     {
         for (var attempt = 1; attempt <= Constants.MaxRetries; attempt++)
@@ -44,12 +44,14 @@ public class AmadeusFlightSearchService : IAmadeusFlightSearchService
 
                 HttpClient client = _httpClientFactory.CreateClient();
                 string url = $"{Constants.AmadeusTestBase}/v2/shopping/flight-offers?" +
-                        $"originLocationCode={origin}&" +
-                        $"destinationLocationCode={destination}&" +
-                        $"departureDate={departureDate}&" +
-                        $"returnDate={returnDate}&" +
-                        $"adults=1&" +
-                        $"currencyCode=BRL";
+                    $"originLocationCode={origin}&" +
+                    $"destinationLocationCode={destination}&" +
+                    $"departureDate={departureDate}&" +
+                    $"returnDate={returnDate}&" +
+                    $"adults=1&" +
+                    $"currencyCode=BRL&" +
+                    $"travelClass=ECONOMY&" +
+                    $"max=30";
 
                 using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
