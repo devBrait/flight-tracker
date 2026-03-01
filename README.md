@@ -21,23 +21,13 @@ FlightTracker/
 
 ## Configuration
 
-Use a `.env` file (copy from `.env.example`) or appsettings. Env vars use `Section__Key` (e.g. `FLIGHT__ORIGIN`, `AMADEUS__CLIENTID`).
+Use a `.env` file. Env vars use `Section__Key` (e.g. `FLIGHT__ORIGIN`, `AMADEUS__CLIENTID`).
 
 ## How to run
 
 ```bash
 dotnet run
 ```
-
-The app runs once: fetches price → compares to target → sends Telegram if price ≤ target → exits. Schedule it with a cron (e.g. daily) on Render, GitHub Actions, or any host.
-
-## Flow
-
-1. Load config (env / appsettings).
-2. Fetch lowest price from Amadeus (one-way or round-trip).
-3. If no price found → log and exit.
-4. If price > target → log and exit.
-5. If price ≤ target → send Telegram message with price and Google Flights link → exit.
 
 ## Tech stack
 
