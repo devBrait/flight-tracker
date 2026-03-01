@@ -5,14 +5,11 @@ namespace FlightTracker.Services;
 /// </summary>
 public static class GoogleFlightsLinkBuilder
 {
-    /// <summary>
-    /// One-way: q=ORIGIN DESTINATION YYYY-MM-DD. Round-trip: includes return date in query.
-    /// </summary>
     public static string Build(string origin, string destination, string departureDate, string? returnDate = null)
     {
-        var q = string.IsNullOrWhiteSpace(returnDate)
+        var completeLink = string.IsNullOrWhiteSpace(returnDate)
             ? $"{origin} {destination} {departureDate}"
             : $"{origin} {destination} {departureDate} {returnDate.Trim()}";
-        return "https://www.google.com/travel/flights?q=" + Uri.EscapeDataString(q);
+        return "https://www.google.com/travel/flights?q=" + Uri.EscapeDataString(completeLink);
     }
 }
