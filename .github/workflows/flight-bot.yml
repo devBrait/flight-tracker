@@ -1,0 +1,36 @@
+name: Flight Tracker
+
+on:
+  schedule:
+    - cron: '0 11 * * *'  # 08:00 Brasil
+    - cron: '0 1 * * *'   # 22:00 Brasil
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    env:
+      AMADEUS__CLIENTID: ${{ secrets.AMADEUS_CLIENT_ID }}
+      AMADEUS__CLIENTSECRET: ${{ secrets.AMADEUS_CLIENT_SECRET }}
+      TELEGRAM__BOTTOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM__CHATID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      FLIGHT__ORIGIN: ${{ secrets.FLIGHT__ORIGIN }}
+      FLIGHT__DESTINATION: ${{ secrets.FLIGHT__DESTINATION }}
+      FLIGHT__DEPARTUREDATE: ${{ secrets.FLIGHT__DEPARTUREDATE }}
+      FLIGHT__RETURNDATE: ${{ secrets.FLIGHT__RETURNDATE }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Run Flight Tracker
+        run: dotnet run --project src/FlightTracker
